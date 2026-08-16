@@ -207,7 +207,9 @@ static UNDERSCORED_REFERENCES: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 pub fn is_html(text: impl AsRef<str>) -> bool {
-    HTML.is_match(text.as_ref())
+    let text = text.as_ref();
+    // every branch of HTML starts with '<', so no '<' means no match
+    text.contains('<') && HTML.is_match(text)
 }
 
 pub fn html_to_text_line(html: &str, preserve_media_filenames: bool) -> Cow<'_, str> {
@@ -229,7 +231,12 @@ pub fn strip_html(html: &str) -> Cow<'_, str> {
 }
 
 pub fn strip_html_preserving_entities(html: &str) -> Cow<'_, str> {
-    HTML.replace_all(html, "")
+    if html.contains('<') {
+        HTML.replace_all(html, "")
+    } else {
+        // nothing to do
+        html.into()
+    }
 }
 
 pub fn decode_entities(html: &str) -> Cow<'_, str> {

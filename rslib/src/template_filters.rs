@@ -117,9 +117,25 @@ fn captured_sound(caps: &Captures) -> bool {
     caps.get(2).unwrap().as_str().starts_with("sound:")
 }
 
+/// The furigana regex treats a space as a separator, so non-breaking spaces
+/// need to be normalised first.
+fn replace_nbsp(text: &str) -> Cow<'_, str> {
+    if text.contains("&nbsp;") {
+        text.replace("&nbsp;", " ").into()
+    } else {
+        // nothing to do
+        text.into()
+    }
+}
+
 fn kana_filter(text: &str) -> Cow<'_, str> {
+    let text = replace_nbsp(text);
+    if !text.contains('[') {
+        // no furigana to rewrite
+        return text;
+    }
     FURIGANA
-        .replace_all(&text.replace("&nbsp;", " "), |caps: &Captures| {
+        .replace_all(&text, |caps: &Captures| {
             if captured_sound(caps) {
                 caps.get(0).unwrap().as_str().to_owned()
             } else {
@@ -131,8 +147,13 @@ fn kana_filter(text: &str) -> Cow<'_, str> {
 }
 
 fn kanji_filter(text: &str) -> Cow<'_, str> {
+    let text = replace_nbsp(text);
+    if !text.contains('[') {
+        // no furigana to rewrite
+        return text;
+    }
     FURIGANA
-        .replace_all(&text.replace("&nbsp;", " "), |caps: &Captures| {
+        .replace_all(&text, |caps: &Captures| {
             if captured_sound(caps) {
                 caps.get(0).unwrap().as_str().to_owned()
             } else {
@@ -144,8 +165,13 @@ fn kanji_filter(text: &str) -> Cow<'_, str> {
 }
 
 fn furigana_filter(text: &str) -> Cow<'_, str> {
+    let text = replace_nbsp(text);
+    if !text.contains('[') {
+        // no furigana to rewrite
+        return text;
+    }
     FURIGANA
-        .replace_all(&text.replace("&nbsp;", " "), |caps: &Captures| {
+        .replace_all(&text, |caps: &Captures| {
             if captured_sound(caps) {
                 caps.get(0).unwrap().as_str().to_owned()
             } else {
@@ -220,6 +246,17 @@ mod test {
             furigana_filter("first[second]").as_ref(),
             "<ruby><rb>first</rb><rt>second</rt></ruby>"
         );
+    }
+
+    #[test]
+    fn furigana_without_ruby() {
+        // text with no ruby is returned as-is, but non-breaking spaces are
+        // still normalised
+        for filter in [kana_filter, kanji_filter, furigana_filter] {
+            assert_eq!(filter("plain text").as_ref(), "plain text");
+            assert_eq!(filter("a&nbsp;b").as_ref(), "a b");
+            assert_eq!(filter("&nbsp;").as_ref(), " ");
+        }
     }
 
     #[allow(clippy::needless_raw_string_hashes)]
